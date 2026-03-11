@@ -35,6 +35,8 @@ let
 in
 {
   options.aws = {
+    enable = lib.mkEnableOption "AWS credential management via 1Password";
+
     region = lib.mkOption {
       type = lib.types.str;
       description = "AWS region for the default profile";
@@ -60,7 +62,7 @@ in
     };
   };
 
-  config = {
+  config = lib.mkIf cfg.enable {
     packages = [
       pkgs.awscli2
     ];
