@@ -16,14 +16,20 @@ let
 
     if [[ -z "''${OP_CONNECT_HOST:-}" || -z "''${OP_CONNECT_TOKEN:-}" ]]; then
       if ! op account get &>/dev/null; then
-        # Only attempt an interactive sign-in when a controlling terminal is
-        # actually available. Otherwise `op signin` blocks forever waiting for a
-        # password prompt that can never be answered (e.g. `cdk deploy` from a
-        # non-interactive script). Fail fast with a useful message instead.
-        if (exec </dev/tty) 2>/dev/null; then
+        # Only attempt an interactive sign-in when THIS process's own stdin and
+        # stderr are a real terminal -- i.e. the user can both see the password
+        # prompt (stderr) and type an answer (stdin). Testing whether /dev/tty
+        # is merely *openable* is not enough: tools that run the credential
+        # process while capturing its output keep the controlling terminal
+        # inheritable, so /dev/tty opens fine even though no human can interact.
+        # `cdk deploy` is exactly this case -- the AWS SDK runs us via
+        # child_process.exec() with all std streams piped -- so `op signin`
+        # would write an invisible prompt to the captured stderr and then block
+        # forever reading /dev/tty. Gate on -t 0/-t 2 to fail fast instead.
+        if [[ -t 0 && -t 2 ]]; then
           eval "$(op signin)"
         else
-          echo "credential-process: not signed in to 1Password and no terminal is available for an interactive sign-in." >&2
+          echo "credential-process: not signed in to 1Password and no interactive terminal is available for sign-in." >&2
           echo "Sign in first (run 'eval \$(op signin)') in an interactive shell, or set OP_CONNECT_HOST/OP_CONNECT_TOKEN, before invoking the AWS CLI non-interactively." >&2
           exit 1
         fi
